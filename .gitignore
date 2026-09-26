@@ -1,0 +1,56 @@
+## Visual Studio files and folders
+.vs/
+*.sln.docstates
+*.suo
+*.user
+*.userosscache
+*.slnf
+*.vsp
+*.vps
+*.vsscc
+*.vspscc
+
+## Build output directories
+[Bb]in/
+[Ob]j/
+out/
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+build/
+bld/
+
+## User-specific files
+*.rsuser
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+## Mono / Rider / OmniSharp
+.idea/
+*.sln.DotSettings.user
+
+## NuGet Packages
+*.nupkg
+*.snupkg
+**/packages/*
+!**/packages/build/
+
+## Test Results
+[Tt]est[Rr]esult*/
+[Bb]enchmark[Rr]esult*/
+
+## Node.js / Front-end dependencies (if applicable)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+## Miscellaneous local environment files
+.env
+.env.local
+*.log

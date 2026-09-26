@@ -1,0 +1,28 @@
+﻿{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:5102",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "GEMINI_API_KEY": "AQ.Ab8RN6K9d_VaEF7SzZu9FAoVfXLsA-yqHqkXRSJUK2ikak_Y_w"
+      }
+    },
+    "https": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": false,
+      "applicationUrl": "https://localhost:7114;http://localhost:5102",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "GEMINI_API_KEY": "AQ.Ab8RN6K9d_VaEF7SzZu9FAoVfXLsA-yqHqkXRSJUK2ikak_Y_w"
+      }
+    },
+    "CheckForNewGeminiKey": {
+      "url": "https://aistudio.google.com/app/api-keys?utm_source=gemini&project=gen-lang-client-0879918992"
+    }
+  }
+}

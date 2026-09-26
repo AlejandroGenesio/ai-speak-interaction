@@ -1,0 +1,6 @@
+@Speesh_HostAddress = http://localhost:5102
+
+GET {{Speesh_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

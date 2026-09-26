@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ash Voice Assistant - Wake Word</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        .card {
+            background-color: #1e293b;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+        h2 { margin-top: 0; color: #38bdf8; }
+        .status {
+            font-size: 0.95rem;
+            margin-bottom: 1.5rem;
+            color: #94a3b8;
+        }
+        .status.listening { color: #4ade80; font-weight: bold; }
+        button {
+            background-color: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: bold;
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+        button.active { background-color: #ef4444; }
+        .output-box {
+            margin-top: 1.5rem;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            min-height: 80px;
+            text-align: left;
+            word-break: break-word;
+            font-size: 1.05rem;
+        }
+        .response-box {
+            margin-top: 0.75rem;
+            padding: 1rem;
+            border-left: 3px solid #38bdf8;
+            background-color: #172554;
+            border-radius: 0.25rem;
+            min-height: 3rem;
+            text-align: left;
+            white-space: pre-wrap;
+            overflow-wrap: anywhere;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <h2>Assistente Ash (Vocale)</h2>
+        <div id="status" class="status">In attesa di attivazione...</div>
+        
+        <button id="toggleButton" onclick="toggleAssistant()">🔌 Attiva Assistente</button>
+        
+        <div class="output-box" id="output">Trascrizione in tempo reale...</div>
+        <div class="response-box" id="response" aria-live="polite">La risposta del server apparirà qui.</div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        const statusDiv = document.getElementById('status');
+        const outputDiv = document.getElementById('output');
+        const toggleButton = document.getElementById('toggleButton');
+
+        let recognition = null;
+        let isRunning = false;
+        let waitingForCommand = false;
+        let isSpeaking = false; // true when TTS is speaking so we don't restart recognition
+
+        if (!SpeechRecognition) {
+            alert("Il tuo browser non supporta il riconoscimento vocale. Usa Google Chrome.");
+        } else {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'it-IT';
+            recognition.interimResults = true;
+            recognition.continuous = true; // Resta in ascolto continuo
+
+            recognition.onstart = () => {
+                statusDiv.textContent = "In ascolto... Di 'Ash' per iniziare.";
+                statusDiv.classList.add('listening');
+            };
+
+            recognition.onresult = (event) => {
+                let transcript = '';
+                for (let i = event.resultIndex; i < event.results.length; ++i) {
+                    transcript += event.results[i][0].transcript;
+                }
+                
+                transcript = transcript.trim().toLowerCase();
+                outputDiv.textContent = `Hai detto: "${transcript}"`;
+
+                // 1. Fase di attesa della parola chiave "ash"
+                if (!waitingForCommand) {
+                    if (transcript.includes("ash") || transcript.includes("as")) {
+                        waitingForCommand = true;
+                        statusDiv.textContent = "✨ Ash attivato! Dimmi pure la tua domanda...";
+                        outputDiv.textContent = "[In ascolto comando...]";
+                    }
+                } 
+                // 2. Fase in cui ha già sentito "Ash" e sta ascoltando la frase finale prima di fermarsi
+                else {
+                    // Quando l'utente finisce di parlare (isFinal)
+                    if (event.results[event.results.length - 1].isFinal) {
+                        const finalCommand = transcript;
+                        statusDiv.textContent = "Elaborazione risposta...";
+                        
+                        console.log("Comando inviato ad Ash:", finalCommand);
+                        requestGeminiResponse(finalCommand);
+
+                        // Reset per tornare ad ascoltare la parola chiave "Ash"
+                        waitingForCommand = false;
+                    }
+                }
+            };
+
+            recognition.onerror = (event) => {
+                console.warn("Errore speech:", event.error);
+            };
+
+            // Riavvia automaticamente il microfono se si chiude da solo per silenzio prolungato
+            recognition.onend = () => {
+                // If we are speaking, do not automatically restart here; utter.onend will handle restart
+                if (isRunning && !isSpeaking) {
+                    try {
+                        recognition.start();
+                    } catch (e) {
+                        console.log("Riavvio in corso...");
+                    }
+                }
+            };
+        }
+
+        // Function moved out of the error handler so it is available when called from onresult
+        async function requestGeminiResponse(command) {
+            const responseDiv = document.getElementById('response');
+            responseDiv.textContent = "Attendo la risposta del server...";
+
+            try {
+                const result = await fetch(`/gemini?input=${encodeURIComponent(command)}`);
+                const data = await result.json();
+
+                if (!result.ok) {
+                    throw new Error(data.error || `Richiesta non riuscita (${result.status}).`);
+                }
+
+                const text = data.response || "Il server ha restituito una risposta vuota.";
+                responseDiv.textContent = text;
+                statusDiv.textContent = "Risposta ricevuta.";
+
+                // If we have TTS available, speak the response
+                if (text && window.speechSynthesis) {
+                    try {
+                        if (isRunning && recognition) {
+                            // prevent recognition.onend from auto-restarting while speaking
+                            isSpeaking = true;
+                            try { recognition.stop(); } catch (e) { console.warn('Could not stop recognition:', e); }
+                        }
+
+                        await speakText(text);
+                    } catch (e) {
+                        console.warn('TTS failed:', e);
+                        isSpeaking = false;
+                    }
+                }
+            } catch (error) {
+                responseDiv.textContent = `Errore: ${error.message}`;
+                statusDiv.textContent = "Impossibile ottenere una risposta dal server.";
+            }
+
+            setTimeout(() => {
+                if (isRunning && !waitingForCommand && !isSpeaking) {
+                    statusDiv.textContent = "In ascolto... Di 'Ash' per iniziare.";
+                }
+            }, 2000);
+        }
+
+        // Speak text using Web Speech API. Returns a promise resolved when speaking ends.
+        function speakText(text) {
+            return new Promise((resolve) => {
+                if (!window.speechSynthesis) {
+                    resolve();
+                    return;
+                }
+
+                // Cancel any queued utterances and create new one
+                window.speechSynthesis.cancel();
+                const utter = new SpeechSynthesisUtterance(text);
+                utter.lang = 'it-IT';
+                utter.rate = 1;
+                utter.pitch = 1;
+
+                // Try to pick an Italian voice if available. Prefer 'Luca' by name; otherwise prefer a male Italian voice,
+                // then any Italian voice, and finally any available voice. Inform the user when Luca is unavailable.
+                const setVoice = () => {
+                    const voices = window.speechSynthesis.getVoices();
+                    if (!voices || !voices.length) return;
+
+                    // 1) Look for voice named 'Luca'
+                    const luca = voices.find(v => (v.name || '').toLowerCase().includes('luca'));
+                    if (luca) {
+                        utter.voice = luca;
+                        return;
+                    }
+
+                    // 2) Prefer Italian voices
+                    let italian = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith('it'));
+
+                    // 3) Try to prefer a male Italian voice by matching common male Italian names
+                    const maleNameHints = ['alessandro','luca','paolo','marco','matteo','francesco','giovanni','lorenzo','antonio','enrico','diego','andrea','gabriele','fabio'];
+                    if (italian.length) {
+                        const byName = italian.find(v => {
+                            const n = (v.name || '').toLowerCase();
+                            return maleNameHints.some(h => n.includes(h));
+                        });
+                        if (byName) {
+                            utter.voice = byName;
+                            return;
+                        }
+
+                        // Look for hints like 'male' or 'masc' in name/voiceURI
+                        const byMaleWord = italian.find(v => {
+                            const s = ((v.name || '') + ' ' + (v.voiceURI || '')).toLowerCase();
+                            return s.includes('male') || s.includes('mas') || s.includes('masc');
+                        });
+                        if (byMaleWord) {
+                            utter.voice = byMaleWord;
+                            return;
+                        }
+
+                        // Fallback to first Italian voice
+                        utter.voice = italian[0];
+                        return;
+                    }
+
+                    // 4) No Italian voices: use first available voice
+                    utter.voice = voices[0];
+                    return;
+                };
+
+                setVoice();
+                // Some browsers load voices asynchronously; ensure we re-run setVoice when voices change
+                if (!utter.voice) {
+                    window.speechSynthesis.onvoiceschanged = () => {
+                        try { setVoice(); } catch (e) { console.warn('setVoice failed', e); }
+                    };
+                }
+
+                utter.onstart = () => {
+                    statusDiv.textContent = "Parlando...";
+                };
+
+                utter.onend = () => {
+                    isSpeaking = false;
+                    // Restart recognition after speech ends
+                    if (isRunning && recognition) {
+                        try { recognition.start(); } catch (e) { console.warn('Could not restart recognition:', e); }
+                    }
+                    resolve();
+                };
+
+                utter.onerror = (e) => {
+                    console.warn('TTS error', e);
+                    isSpeaking = false;
+                    resolve();
+                };
+
+                window.speechSynthesis.speak(utter);
+            });
+        }
+
+        function toggleAssistant() {
+            if (!recognition) return;
+
+            if (isRunning) {
+                isRunning = false;
+                recognition.stop();
+                toggleButton.textContent = "🔌 Attiva Assistente";
+                toggleButton.classList.remove('active');
+                statusDiv.textContent = "Assistente spento.";
+                statusDiv.classList.remove('listening');
+            } else {
+                isRunning = true;
+                waitingForCommand = false;
+                try {
+                    recognition.start();
+                    toggleButton.textContent = "⏹️ Spegni Assistente";
+                    toggleButton.classList.add('active');
+                } catch (e) {
+                    console.error(e);
+                }
+            }
+        }
+    </script>
+
+</body>
+</html>
